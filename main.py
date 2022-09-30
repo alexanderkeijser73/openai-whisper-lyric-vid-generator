@@ -1,22 +1,20 @@
 import subprocess
 from io import StringIO
 from pathlib import Path
-import os
+from typing import Dict, Union
 
 import whisper
 import whisper.utils
 from pytube import YouTube
 
+WhisperResult = Dict[str, Union[str, list, dict]]
+
 MODEL_VARIANT = "tiny"  # "medium" and "large" are really good but require a GPU
 
-out_dir = Path.cwd()
-audio_path = out_dir / "audio_out.mp3"
-srt_path = out_dir / "lyrics_out.srt"
-video_path = out_dir / "video_out.mp4"
-final_vid_path = out_dir / "final_vid.mp4"
 
-
-def download_vid_and_audio(youtube_url: str):
+def download_vid_and_audio(
+    youtube_url: str, video_path: Path, audio_path: Path
+) -> None:
     youtube = YouTube(youtube_url)
 
     audio_stream = (
@@ -26,7 +24,7 @@ def download_vid_and_audio(youtube_url: str):
     )
 
     audio_stream.download(
-        output_path=os.path.dirname(audio_path), filename=os.path.basename(audio_path)
+        output_path=str(audio_path.parent), filename=str(audio_path.name)
     )
 
     # get the lowest quality video stream
@@ -35,22 +33,24 @@ def download_vid_and_audio(youtube_url: str):
     video_stream = youtube.streams.get_by_itag(18)  ##### itag 18 also seems to be good
 
     video_stream.download(
-        output_path=os.path.dirname(video_path), filename=os.path.basename(video_path)
+        output_path=str(video_path.parent), filename=str(video_path.name)
     )
 
 
-def write_srt(result):
+def write_srt(result: WhisperResult) -> None:
     with open(srt_path, "w") as f:
         whisper.utils.write_srt(result["segments"], f)
 
 
-def print_lyrics(result):
+def print_lyrics(result: WhisperResult):
     buffer = StringIO()
     whisper.utils.write_txt(result["segments"], buffer)
     print(buffer.getvalue())
 
 
-def write_lyrics_to_vid(srt_path, vid_path, final_vid_path, mode="hard"):
+def write_lyrics_to_vid(
+    srt_path: Path, vid_path: Path, final_vid_path: Path, srt_write_mode: str = "hard"
+) -> None:
     # https://trac.ffmpeg.org/wiki/HowToBurnSubtitlesIntoVideo
     # https://stackoverflow.com/questions/8672809/use-ffmpeg-to-add-text-subtitles
 
@@ -80,24 +80,42 @@ def write_lyrics_to_vid(srt_path, vid_path, final_vid_path, mode="hard"):
     }
 
     valid_options = set(commands.keys())
-    if not mode in valid_options:
-        raise ValueError(f"Mode '{mode}' not recognized, choose one of {valid_options}")
+    if not srt_write_mode in valid_options:
+        raise ValueError(
+            f"Mode '{srt_write_mode}' not recognized, choose one of {valid_options}"
+        )
 
-    result = subprocess.run(commands[mode], capture_output=True)
+    out = subprocess.run(commands[srt_write_mode], capture_output=True)
 
-    print(result.stdout.decode())
-    print(result.stderr.decode())
+    print(out.stdout.decode())
+    print(out.stderr.decode())
 
 
-if __name__ == "__main__":
-    youtube_url = "https://www.youtube.com/watch?v=ThCbl10-1pA&ab_channel=COLORS"
+def main(
+    youtube_url: str,
+    video_path: Path,
+    audio_path: Path,
+    final_vid_path: Path,
+    model_variant: str = MODEL_VARIANT,
+) -> None:
+    download_vid_and_audio(youtube_url, video_path, audio_path)
 
-    download_vid_and_audio(youtube_url)
-
-    model = whisper.load_model(MODEL_VARIANT)
-    result = model.transcribe(str(audio_path))
+    model = whisper.load_model(model_variant)
+    result: WhisperResult = model.transcribe(str(audio_path))
 
     write_srt(result)
     print_lyrics(result)
 
-    write_lyrics_to_vid(srt_path, video_path, final_vid_path, mode="optional")
+    write_lyrics_to_vid(srt_path, video_path, final_vid_path, srt_write_mode="optional")
+
+
+if __name__ == "__main__":
+
+    out_dir = Path.cwd()
+    audio_path = out_dir / "audio_out.mp3"
+    srt_path = out_dir / "lyrics_out.srt"
+    video_path = out_dir / "video_out.mp4"
+    final_vid_path = out_dir / "final_vid.mp4"
+    youtube_url = "https://www.youtube.com/watch?v=ThCbl10-1pA&ab_channel=COLORS"
+
+    main(youtube_url, video_path, audio_path, final_vid_path)
