@@ -55,28 +55,8 @@ def write_lyrics_to_vid(
     # https://stackoverflow.com/questions/8672809/use-ffmpeg-to-add-text-subtitles
 
     commands = {
-        "optional": [
-            "ffmpeg",
-            "-y",
-            "-i",
-            vid_path,
-            "-i",
-            srt_path,
-            "-c",
-            "copy",
-            "-c:s",
-            "mov_text",
-            final_vid_path,
-        ],
-        "hard": [
-            "ffmpeg",
-            "-y",
-            "-i",
-            vid_path,
-            "-vf",
-            f"subtitles={srt_path}",
-            final_vid_path,
-        ],
+        "optional": f"ffmpeg -y -i {vid_path} -i {srt_path} -c copy -c:s mov_text {final_vid_path}",
+        "hard": f"ffmpeg -y -i {vid_path} -vf subtitles={srt_path} final_vid_path",
     }
 
     valid_options = set(commands.keys())
@@ -85,7 +65,7 @@ def write_lyrics_to_vid(
             f"Mode '{srt_write_mode}' not recognized, choose one of {valid_options}"
         )
 
-    out = subprocess.run(commands[srt_write_mode], capture_output=True)
+    out = subprocess.run(commands[srt_write_mode].split(), capture_output=True)
 
     print(out.stdout.decode())
     print(out.stderr.decode())
@@ -116,6 +96,7 @@ if __name__ == "__main__":
     srt_path = out_dir / "lyrics_out.srt"
     video_path = out_dir / "video_out.mp4"
     final_vid_path = out_dir / "final_vid.mp4"
+
     youtube_url = "https://www.youtube.com/watch?v=ThCbl10-1pA&ab_channel=COLORS"
 
     main(youtube_url, video_path, audio_path, final_vid_path)
